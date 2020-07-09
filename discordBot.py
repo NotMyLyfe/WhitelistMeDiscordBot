@@ -14,7 +14,7 @@ sqlConnection = mysql.connector.connect(
 cursor = sqlConnection.cursor()
 
 client = commands.Bot(command_prefix = '~')
-
+            
 @client.event
 async def on_ready():
     await client.change_presence(activity=discord.Game('MC Whitelist | ~help'))
