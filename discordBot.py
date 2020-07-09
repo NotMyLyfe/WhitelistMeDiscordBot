@@ -3,7 +3,6 @@ from discord.ext import commands
 import mysql.connector
 import os
 import requests
-import asyncio
 
 sqlConnection = mysql.connector.connect(
     host=os.getenv("sqlDatabaseIP"),
@@ -14,8 +13,6 @@ sqlConnection = mysql.connector.connect(
 
 cursor = sqlConnection.cursor()
 
-client = commands.Bot(command_prefix = '~')
-
 def sqlExecute(cursor, command):
     for i in range(10):
         try:
@@ -25,6 +22,8 @@ def sqlExecute(cursor, command):
             if e.errno == 2006:
                 sqlConnection.connect()
     return 0
+
+client = commands.Bot(command_prefix = '~')
             
 @client.event
 async def on_ready():
