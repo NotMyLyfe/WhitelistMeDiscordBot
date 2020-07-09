@@ -13,16 +13,6 @@ sqlConnection = mysql.connector.connect(
 
 cursor = sqlConnection.cursor()
 
-def sqlExecute(cursor, command):
-    for i in range(10):
-        try:
-            cursor.execute(command)
-            return 1
-        except mysql.connector.Error as e:
-            if e.errno == 2006:
-                sqlConnection.connect()
-    return 0
-
 client = commands.Bot(command_prefix = '~')
             
 @client.event
@@ -36,6 +26,16 @@ async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
         await ctx.author.send("The command you've entered is invalid. To find the list of commands, type `~help` in the Discord channel.")  
     await ctx.channel.purge(limit=1)
+
+def sqlExecute(cursor, command):
+    for i in range(10):
+        try:
+            cursor.execute(command)
+            return 1
+        except mysql.connector.Error as e:
+            if e.errno == 2006:
+                sqlConnection.connect()
+    return 0
 
 @client.command()
 async def add(ctx, username):
