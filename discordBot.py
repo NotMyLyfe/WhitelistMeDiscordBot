@@ -3,6 +3,7 @@ from discord.ext import commands
 import mysql.connector
 import os
 import requests
+import asyncio
 
 sqlConnection = mysql.connector.connect(
     host=os.getenv("sqlDatabaseIP"),
@@ -14,7 +15,17 @@ sqlConnection = mysql.connector.connect(
 cursor = sqlConnection.cursor()
 
 client = commands.Bot(command_prefix = '~')
-            
+
+def sqlExecute(cursor, command):
+    for i in range(10):
+        try:
+            cursor.execute(command)
+            return 1
+        except mysql.connector.Error as e:
+            if e.errno == 2006:
+                sqlConnection.connect()
+    return 0
+
 @client.event
 async def on_ready():
     await client.change_presence(activity=discord.Game('MC Whitelist | ~help'))
@@ -29,20 +40,20 @@ async def on_command_error(ctx, error):
 
 @client.command()
 async def add(ctx, username):
-    cursor.execute("SELECT EXISTS(SELECT * FROM `discord` WHERE `discordID` = '%s') as ex;" % ctx.author.id)
+    sqlExecute(cursor, "SELECT EXISTS(SELECT * FROM `discord` WHERE `discordID` = '%s') as ex;" % ctx.author.id)
     if cursor.fetchone()[0] == 0:
         minecraftData = requests.get(url = "https://playerdb.co/api/player/minecraft/%s" % username)
         if minecraftData.status_code == 200:
             uuid = minecraftData.json().get("data").get("player").get("id")
-            cursor.execute("SELECT EXISTS(SELECT * FROM `discord` WHERE `uuid` = '%s') as ex;" % uuid)
+            sqlExecute(cursor, "SELECT EXISTS(SELECT * FROM `discord` WHERE `uuid` = '%s') as ex;" % uuid)
             if cursor.fetchone()[0] == 0:
-                cursor.execute("SELECT EXISTS(SELECT * FROM `whitelist` where `uuid` = '%s') as ex;" % uuid)
+                sqlExecute(cursor, "SELECT EXISTS(SELECT * FROM `whitelist` where `uuid` = '%s') as ex;" % uuid)
                 if cursor.fetchone()[0] == 0:
-                    cursor.execute("INSERT INTO `whitelist` (`uuid`, `name`, `whitelisted`) VALUES ('%s', '%s', 'true');" % (uuid, username))
+                    sqlExecute(cursor, "INSERT INTO `whitelist` (`uuid`, `name`, `whitelisted`) VALUES ('%s', '%s', 'true');" % (uuid, username))
                 else:
-                    cursor.execute("UPDATE `whitelist` SET `whitelisted` = 'true' WHERE `uuid` = '%s';" % (uuid))
+                    sqlExecute(cursor, "UPDATE `whitelist` SET `whitelisted` = 'true' WHERE `uuid` = '%s';" % (uuid))
                 sqlConnection.commit()
-                cursor.execute("INSERT INTO `discord` (`discordID`, `uuid`) VALUES ('%s', '%s');" % (ctx.author.id, uuid))
+                sqlExecute(cursor, "INSERT INTO `discord` (`discordID`, `uuid`) VALUES ('%s', '%s');" % (ctx.author.id, uuid))
                 sqlConnection.commit()
                 await ctx.author.send("You have successfully whitelisted your Minecraft account!")
             else:
@@ -62,15 +73,15 @@ async def clear_error(ctx, error):
 
 @client.command()
 async def remove(ctx):
-    cursor.execute("SELECT EXISTS(SELECT * FROM `discord` WHERE `discordID` = '%s') as ex;" % ctx.author.id)
+    sqlExecute(cursor, "SELECT EXISTS(SELECT * FROM `discord` WHERE `discordID` = '%s') as ex;" % ctx.author.id)
     if cursor.fetchone()[0] == 0:
         await ctx.author.send("You currently don't have a Minecraft account linked to your Discord account.")
     else:
-        cursor.execute("SELECT * FROM `discord` WHERE `discordID` = '%s';" % ctx.author.id)
+        sqlExecute(cursor, "SELECT * FROM `discord` WHERE `discordID` = '%s';" % ctx.author.id)
         uuid = cursor.fetchone()[2]
-        cursor.execute("DELETE FROM `discord` WHERE `discordID` = '%s';" % ctx.author.id)
+        sqlExecute(cursor, "DELETE FROM `discord` WHERE `discordID` = '%s';" % ctx.author.id)
         sqlConnection.commit()
-        cursor.execute("UPDATE `whitelist` SET `whitelisted` = 'false' where `uuid` = '%s';" % uuid)
+        sqlExecute(cursor, "UPDATE `whitelist` SET `whitelisted` = 'false' where `uuid` = '%s';" % uuid)
         sqlConnection.commit()
         await ctx.author.send("You have successfully unlinked your Minecraft account.")
     await ctx.channel.purge(limit=1)
