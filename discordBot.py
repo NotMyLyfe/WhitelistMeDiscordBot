@@ -27,32 +27,28 @@ async def on_command_error(ctx, error):
         await ctx.author.send("The command you've entered is invalid. To find the list of commands, type `~help` in the Discord channel.")  
     await ctx.channel.purge(limit=1)
 
-def sqlExecute(cursor, command):
+@client.command()
+async def add(ctx, username):
     for i in range(10):
         try:
-            cursor.execute(command)
-            return 1
+            cursor.execute("SELECT EXISTS(SELECT * FROM `discord` WHERE `discordID` = '%s') as ex;" % ctx.author.id)
+            break
         except mysql.connector.Error as e:
             if e.errno == 2006:
                 sqlConnection.connect()
-    return 0
-
-@client.command()
-async def add(ctx, username):
-    sqlExecute(cursor, "SELECT EXISTS(SELECT * FROM `discord` WHERE `discordID` = '%s') as ex;" % ctx.author.id)
     if cursor.fetchone()[0] == 0:
         minecraftData = requests.get(url = "https://playerdb.co/api/player/minecraft/%s" % username)
         if minecraftData.status_code == 200:
             uuid = minecraftData.json().get("data").get("player").get("id")
-            sqlExecute(cursor, "SELECT EXISTS(SELECT * FROM `discord` WHERE `uuid` = '%s') as ex;" % uuid)
+            cursor.execute("SELECT EXISTS(SELECT * FROM `discord` WHERE `uuid` = '%s') as ex;" % uuid)
             if cursor.fetchone()[0] == 0:
-                sqlExecute(cursor, "SELECT EXISTS(SELECT * FROM `whitelist` where `uuid` = '%s') as ex;" % uuid)
+                cursor.execute("SELECT EXISTS(SELECT * FROM `whitelist` where `uuid` = '%s') as ex;" % uuid)
                 if cursor.fetchone()[0] == 0:
-                    sqlExecute(cursor, "INSERT INTO `whitelist` (`uuid`, `name`, `whitelisted`) VALUES ('%s', '%s', 'true');" % (uuid, username))
+                    cursor.execute("INSERT INTO `whitelist` (`uuid`, `name`, `whitelisted`) VALUES ('%s', '%s', 'true');" % (uuid, username))
                 else:
-                    sqlExecute(cursor, "UPDATE `whitelist` SET `whitelisted` = 'true' WHERE `uuid` = '%s';" % (uuid))
+                    cursor.execute("UPDATE `whitelist` SET `whitelisted` = 'true' WHERE `uuid` = '%s';" % (uuid))
                 sqlConnection.commit()
-                sqlExecute(cursor, "INSERT INTO `discord` (`discordID`, `uuid`) VALUES ('%s', '%s');" % (ctx.author.id, uuid))
+                cursor.execute("INSERT INTO `discord` (`discordID`, `uuid`) VALUES ('%s', '%s');" % (ctx.author.id, uuid))
                 sqlConnection.commit()
                 await ctx.author.send("You have successfully whitelisted your Minecraft account!")
             else:
@@ -72,15 +68,21 @@ async def clear_error(ctx, error):
 
 @client.command()
 async def remove(ctx):
-    sqlExecute(cursor, "SELECT EXISTS(SELECT * FROM `discord` WHERE `discordID` = '%s') as ex;" % ctx.author.id)
+    for i in range(10):
+        try:
+            cursor.execute("SELECT EXISTS(SELECT * FROM `discord` WHERE `discordID` = '%s') as ex;" % ctx.author.id)
+            break
+        except mysql.connector.Error as e:
+            if e.errno == 2006:
+                sqlConnection.connect()
     if cursor.fetchone()[0] == 0:
         await ctx.author.send("You currently don't have a Minecraft account linked to your Discord account.")
     else:
-        sqlExecute(cursor, "SELECT * FROM `discord` WHERE `discordID` = '%s';" % ctx.author.id)
+        cursor.execute("SELECT * FROM `discord` WHERE `discordID` = '%s';" % ctx.author.id)
         uuid = cursor.fetchone()[2]
-        sqlExecute(cursor, "DELETE FROM `discord` WHERE `discordID` = '%s';" % ctx.author.id)
+        cursor.execute("DELETE FROM `discord` WHERE `discordID` = '%s';" % ctx.author.id)
         sqlConnection.commit()
-        sqlExecute(cursor, "UPDATE `whitelist` SET `whitelisted` = 'false' where `uuid` = '%s';" % uuid)
+        cursor.execute("UPDATE `whitelist` SET `whitelisted` = 'false' where `uuid` = '%s';" % uuid)
         sqlConnection.commit()
         await ctx.author.send("You have successfully unlinked your Minecraft account.")
     await ctx.channel.purge(limit=1)
